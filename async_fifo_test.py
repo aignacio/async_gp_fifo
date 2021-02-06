@@ -56,13 +56,14 @@ class AFIFODriver(Driver):
         while True:
             await FallingEdge(self.clk_rd)
             if self.valid_rd == 0:
+                data = self.data_rd.value # We capture before we incr. rd ptr
                 self.ready_rd <= 1
                 await RisingEdge(self.clk_rd)
                 break
             elif kwargs["exit_empty"] == True:
                 return "empty"
         self.ready_rd <= 0
-        return self.data_rd
+        return data
 
 async def setup_dut(dut, clk_mode):
     if clk_mode == 0:
@@ -93,7 +94,7 @@ async def afifo_basic_test(dut):
         for i in samples:
             await ff_driver.write(i,exit_full=False)
         for i in samples:
-            assert (read_value := await ff_driver.read(exit_empty=False)) == i, "%d != %d" % (data, comp)
+            assert (read_value := await ff_driver.read(exit_empty=False)) == i, "%x != %x" % (read_value, i)
 
 @cocotb.test()
 async def afifo_basic_inv_test(dut):
@@ -107,7 +108,7 @@ async def afifo_basic_inv_test(dut):
         for i in samples:
             await ff_driver.write(i,exit_full=False)
         for i in samples:
-            assert (read_value := await ff_driver.read(exit_empty=False)) == i, "%d != %d" % (data, comp)
+            assert (read_value := await ff_driver.read(exit_empty=False)) == i, "%d != %d" % (read_value, i)
 
 @cocotb.test()
 async def afifo_write_full(dut):

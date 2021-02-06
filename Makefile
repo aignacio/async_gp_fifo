@@ -2,7 +2,6 @@ COCOTB_HDL_TIMEUNIT				= 1ns
 COCOTB_HDL_TIMEPRECISION	= 1ns
 
 VERILOG_SOURCES	:=	$(shell find . -type f -name *.svh)
-VERILOG_SOURCES	+=	$(shell find . -type f -name *.sv)
 VERILOG_SOURCES	+=	$(shell find . -type f -name *.v)
 VERILOG_SOURCES	+=	$(shell find . -type f -name *.sv)
 
@@ -18,8 +17,8 @@ TEST_RUNS 			:=	20
 MODULE					?= async_fifo_test
 TOPLEVEL				?= async_gp_fifo
 TOPLEVEL_LANG   ?= verilog
-SIM							?= xcelium
-GUI							:= 1
+SIM							?= verilator
+GUI							:= 0
 
 export FIFO_SLOTS
 export FIFO_WIDTH
@@ -42,6 +41,8 @@ else ifeq ($(SIM),verilator)
 									--trace-structs			\
 									$(INCS_VERILOG)			\
 									--report-unoptflat	\
+									-GSLOTS=$(FIFO_SLOTS) \
+									-GWIDTH=$(FIFO_WIDTH) \
 									--Wno-UNOPTFLAT
 else
 $(error "Only sims suported now are Verilator/Xcelium/IUS")
