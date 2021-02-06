@@ -9,6 +9,7 @@
 import random
 import cocotb
 import os
+import logging
 
 from cocotb.clock import Clock
 from cocotb.drivers import Driver
@@ -25,6 +26,7 @@ TEST_RUNS = int(os.environ['TEST_RUNS'])
 
 class AFIFODriver(Driver):
     def __init__(self, signals, debug=False):
+        level = logging.DEBUG if debug else logging.WARNING
         self.clk_wr   = signals.wr_clk
         self.valid_wr = signals.wr_en
         self.data_wr  = signals.wr_data
@@ -38,8 +40,10 @@ class AFIFODriver(Driver):
         self.valid_wr <= 0
         self.ready_rd <= 0
         Driver.__init__(self)
+        self.log.setLevel(level)
 
     async def write(self, data, sync=True, **kwargs):
+        self.log.info("WRITE AFIFO => %x"%data)
         while True:
             await FallingEdge(self.clk_wr)
             self.valid_wr <= 1
@@ -62,10 +66,12 @@ class AFIFODriver(Driver):
                 break
             elif kwargs["exit_empty"] == True:
                 return "empty"
+        self.log.info("READ AFIFO => %x"%data)
         self.ready_rd <= 0
         return data
 
 async def setup_dut(dut, clk_mode):
+    dut._log.info("Configuring clocks...")
     if clk_mode == 0:
         cocotb.fork(Clock(dut.wr_clk, *CLK_50MHz).start())
         cocotb.fork(Clock(dut.rd_clk, *CLK_100MHz).start())
@@ -74,6 +80,7 @@ async def setup_dut(dut, clk_mode):
         cocotb.fork(Clock(dut.wr_clk, *CLK_100MHz).start())
 
 async def reset_dut(dut):
+    dut._log.info("Reseting DUT")
     dut.wr_arst <= 1
     dut.rd_arst <= 0
     await ClockCycles(dut.wr_clk, RST_CYCLES)
@@ -115,7 +122,7 @@ async def afifo_write_full(dut):
     """ Try to write even with fifo full """
     await setup_dut(dut, 1)
     await reset_dut(dut)
-    ff_driver = AFIFODriver(signals=dut)
+    ff_driver = AFIFODriver(signals=dut,debug=True)
     samples = [random.randint(0,(2**MAX_WIDTH_FIFO)-1) for i in range(MAX_SLOTS_FIFO)]
     for i in samples:
         assert ((feedback := await ff_driver.write(i,exit_full=False)) == 0), "AFIFO signaling FULL, where actually it's not!"
@@ -126,5 +133,5 @@ async def afifo_read_empty(dut):
     """ Try to read even with fifo empty """
     await setup_dut(dut, 1)
     await reset_dut(dut)
-    ff_driver = AFIFODriver(signals=dut)
+    ff_driver = AFIFODriver(signals=dut,debug=True)
     assert ((feedback := await ff_driver.read(exit_empty=True)) == "empty"), "AFIFO not signaling empty correctly ==> dut.rd_empty = %d" % dut.rd_empty
