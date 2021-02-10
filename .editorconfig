@@ -31,6 +31,10 @@ indent_size = 2
 indent_size = 2
 indent_tab = space
 
+[*.py]
+indent_style = space
+indent_size = 4
+
 [**.js]
 indent_style = space
 indent_size = 2

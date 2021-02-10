@@ -10,7 +10,10 @@ import random
 import cocotb
 import os
 import logging
+import pytest
+import cocotb_test.simulator
 
+from cocotb.regression import TestFactory
 from cocotb.clock import Clock
 from cocotb.drivers import Driver
 from cocotb.triggers import ClockCycles, FallingEdge, RisingEdge, Timer
@@ -20,9 +23,6 @@ CLK_100MHz = (10, "ns")
 CLK_50MHz  = (20, "ns")
 RST_CYCLES = 2
 WAIT_CYCLES = 2
-MAX_SLOTS_FIFO = int(os.environ['FIFO_SLOTS'])
-MAX_WIDTH_FIFO = int(os.environ['FIFO_WIDTH'])
-TEST_RUNS = int(os.environ['TEST_RUNS'])
 
 class AFIFODriver(Driver):
     def __init__(self, signals, debug=False):
@@ -71,15 +71,20 @@ class AFIFODriver(Driver):
         return data
 
 async def setup_dut(dut, clk_mode):
-    dut._log.info("Configuring clocks...")
-    if clk_mode == 0:
+    dut._log.info("Configuring clocks... -- %d", clk_mode())
+    print(clk_mode())
+    if clk_mode() == 0:
+        dut._log.info("50MHz - wr clk / 100MHz - rd clk")
         cocotb.fork(Clock(dut.wr_clk, *CLK_50MHz).start())
         cocotb.fork(Clock(dut.rd_clk, *CLK_100MHz).start())
     else:
+        dut._log.info("50MHz - rd clk / 100MHz - wr clk")
         cocotb.fork(Clock(dut.rd_clk, *CLK_50MHz).start())
         cocotb.fork(Clock(dut.wr_clk, *CLK_100MHz).start())
 
 async def reset_dut(dut):
+    dut.wr_arst.setimmediatevalue(0)
+    dut.rd_arst.setimmediatevalue(0)
     dut._log.info("Reseting DUT")
     dut.wr_arst <= 1
     dut.rd_arst <= 0
@@ -89,38 +94,15 @@ async def reset_dut(dut):
     await ClockCycles(dut.rd_clk, RST_CYCLES)
     dut.rd_arst <= 0
 
-@cocotb.test()
-async def afifo_basic_test(dut):
-    """ Simple test to produce and consume data from the async fifo """
-    await setup_dut(dut, 0)
-    await reset_dut(dut)
-    ff_driver = AFIFODriver(signals=dut)
-    for i in range(TEST_RUNS):
-        #await reset_dut(dut)
-        samples = [random.randint(0,(2**MAX_WIDTH_FIFO)-1) for i in range(random.randint(0,MAX_SLOTS_FIFO))]
-        for i in samples:
-            await ff_driver.write(i,exit_full=False)
-        for i in samples:
-            assert (read_value := await ff_driver.read(exit_empty=False)) == i, "%x != %x" % (read_value, i)
+def randomly_switch_config():
+    return random.randint(0, 1)
 
-@cocotb.test()
-async def afifo_basic_inv_test(dut):
-    """ Simple test inv, same thing just inverted clocks """
-    await setup_dut(dut, 1)
-    await reset_dut(dut)
-    ff_driver = AFIFODriver(signals=dut)
-    for i in range(TEST_RUNS):
-        #await reset_dut(dut)
-        samples = [random.randint(0,(2**MAX_WIDTH_FIFO)-1) for i in range(random.randint(0,MAX_SLOTS_FIFO))]
-        for i in samples:
-            await ff_driver.write(i,exit_full=False)
-        for i in samples:
-            assert (read_value := await ff_driver.read(exit_empty=False)) == i, "%d != %d" % (read_value, i)
-
-@cocotb.test()
-async def afifo_write_full(dut):
+async def run_test(dut, config_clock):
+    MAX_SLOTS_FIFO = int(os.environ['PARAM_SLOTS'])
+    MAX_WIDTH_FIFO = int(os.environ['PARAM_WIDTH'])
+    TEST_RUNS = int(os.environ['TEST_RUNS'])
     """ Try to write even with fifo full """
-    await setup_dut(dut, 1)
+    await setup_dut(dut, config_clk)
     await reset_dut(dut)
     ff_driver = AFIFODriver(signals=dut,debug=True)
     samples = [random.randint(0,(2**MAX_WIDTH_FIFO)-1) for i in range(MAX_SLOTS_FIFO)]
@@ -128,10 +110,48 @@ async def afifo_write_full(dut):
         assert ((feedback := await ff_driver.write(i,exit_full=False)) == 0), "AFIFO signaling FULL, where actually it's not!"
     assert ((feedback := await ff_driver.write(random.randint(0,(2**MAX_WIDTH_FIFO)-1),exit_full=True)) == 1), "AFIFO not signaling FULL correctly ==> dut.wr_full = %d" % dut.wr_full
 
-@cocotb.test()
-async def afifo_read_empty(dut):
-    """ Try to read even with fifo empty """
-    await setup_dut(dut, 1)
-    await reset_dut(dut)
-    ff_driver = AFIFODriver(signals=dut,debug=True)
-    assert ((feedback := await ff_driver.read(exit_empty=True)) == "empty"), "AFIFO not signaling empty correctly ==> dut.rd_empty = %d" % dut.rd_empty
+if cocotb.SIM_NAME:
+    factory = TestFactory(run_test)
+    factory.add_option('config_clock', [randomly_switch_config])
+    factory.generate_tests()
+
+#@pytest.mark.skipif(os.getenv("SIM") != "verilator", reason="Verilator is the only supported")
+@pytest.mark.parametrize("slots",[2,4,8,16,32])
+def test_async_fifo_full(slots):
+    tests_dir = os.path.dirname(os.path.abspath(__file__))
+    rtl_dir   = tests_dir
+    dut = "async_gp_fifo"
+    module = os.path.splitext(os.path.basename(__file__))[0]
+    toplevel = dut
+    verilog_sources = [
+        os.path.join(rtl_dir, f"{dut}.sv"),
+    ]
+    parameters = {}
+    parameters['SLOTS'] = slots
+    parameters['WIDTH'] = 2**random.randint(2,10)
+
+    extra_env = {f'PARAM_{k}': str(v) for k, v in parameters.items()}
+    extra_env['TEST_RUNS'] = str(random.randint(2,20))
+    extra_env['COCOTB_HDL_TIMEUNIT'] = "1ns"
+    extra_env['COCOTB_HDL_TIMEPRECISION'] = "1ns"
+
+    sim_build = os.path.join(tests_dir, "sim_build_pytest_fifo_full_"+"_".join(("{}={}".format(*i) for i in parameters.items())))
+    #extra_args =  ["-64bit                                          \
+					  # -smartlib				                        \
+					  # -smartorder			                            \
+					  # -access +rwc		                            \
+					  # -clean					                        \
+					  # -lineclean			                            \
+					  # -input ../dump_all.tcl"]
+
+    cocotb_test.simulator.run(
+        python_search=[tests_dir],
+        verilog_sources=verilog_sources,
+        toplevel=toplevel,
+        module=module,
+        parameters=parameters,
+        sim_build=sim_build,
+        extra_env=extra_env,
+        extra_args=["--trace-fst","--trace-structs"]
+        #extra_args=extra_args
+    )

@@ -10,18 +10,18 @@ INCS_VERILOG		:=	$(addprefix +incdir+,$(INCS_VERILOG))
 
 MACRO_VLOG			:=	SIMULATION
 MACROS_VLOG			:=	$(addprefix +define+,$(MACRO_VLOG))
-FIFO_SLOTS			:=	16
-FIFO_WIDTH			:=	64
+PARAM_SLOTS			:=	2
+PARAM_WIDTH			:=	16
 TEST_RUNS 			:=	20
 
-MODULE					?= async_fifo_test
+MODULE					?= initial_fifo_async
 TOPLEVEL				?= async_gp_fifo
 TOPLEVEL_LANG   ?= verilog
 SIM							?= verilator
 GUI							:= 0
 
-export FIFO_SLOTS
-export FIFO_WIDTH
+export PARAM_SLOTS
+export PARAM_WIDTH
 export TEST_RUNS
 
 ifeq ($(SIM),xcelium)
@@ -33,16 +33,16 @@ ifeq ($(SIM),xcelium)
 									-clean					\
 									-lineclean			\
 									$(MACROS_VLOG)	\
-									-defparam async_gp_fifo.SLOTS=$(FIFO_SLOTS) \
-									-defparam async_gp_fifo.WIDTH=$(FIFO_WIDTH) \
+									-defparam async_gp_fifo.SLOTS=$(PARAM_SLOTS) \
+									-defparam async_gp_fifo.WIDTH=$(PARAM_WIDTH) \
 									-input dump_all.tcl
 else ifeq ($(SIM),verilator)
 	EXTRA_ARGS	+=	--trace-fst					\
 									--trace-structs			\
 									$(INCS_VERILOG)			\
 									--report-unoptflat	\
-									-GSLOTS=$(FIFO_SLOTS) \
-									-GWIDTH=$(FIFO_WIDTH) \
+									-GSLOTS=$(PARAM_SLOTS) \
+									-GWIDTH=$(PARAM_WIDTH) \
 									--Wno-UNOPTFLAT
 else
 $(error "Only sims suported now are Verilator/Xcelium/IUS")
