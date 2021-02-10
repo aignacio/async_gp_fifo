@@ -102,7 +102,7 @@ async def run_test(dut, config_clock):
     MAX_WIDTH_FIFO = int(os.environ['PARAM_WIDTH'])
     TEST_RUNS = int(os.environ['TEST_RUNS'])
     """ Try to write even with fifo full """
-    await setup_dut(dut, config_clk)
+    await setup_dut(dut, config_clock)
     await reset_dut(dut)
     ff_driver = AFIFODriver(signals=dut,debug=True)
     samples = [random.randint(0,(2**MAX_WIDTH_FIFO)-1) for i in range(MAX_SLOTS_FIFO)]

@@ -15,8 +15,9 @@ xrun.*
 waves.shm
 xcelium.shm
 ***.swp
-sim_build
+sim_build*
 __pycache__
 results.xml
 dump.fst
 .vscode
+
