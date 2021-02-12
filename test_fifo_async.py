@@ -13,6 +13,8 @@ import logging
 import pytest
 import cocotb_test.simulator
 
+from logging.handlers import RotatingFileHandler
+from cocotb.log import SimColourLogFormatter, SimLog, SimTimeContextFilter
 from cocotb.regression import TestFactory
 from cocotb.clock import Clock
 from cocotb.drivers import Driver
@@ -24,26 +26,32 @@ CLK_50MHz  = (20, "ns")
 RST_CYCLES = 2
 WAIT_CYCLES = 2
 
-class AFIFODriver(Driver):
+class AFIFODriver():
     def __init__(self, signals, debug=False):
-        level = logging.DEBUG if debug else logging.WARNING
+        level         = logging.DEBUG if debug else logging.WARNING
+        self.log      = SimLog("afifo.log")
+        sim_build     = os.environ['SIM_BUILD']
+        file_handler  = RotatingFileHandler(sim_build+"/sim.log", maxBytes=(5 * 1024 * 1024), backupCount=2, mode='w')
+        file_handler.setFormatter(SimColourLogFormatter())
+        self.log.addHandler(file_handler)
+        self.log.addFilter(SimTimeContextFilter())
+        self.log.setLevel(level)
+        self.log.info("SEED ======> %s",str(cocotb.RANDOM_SEED))
+
         self.clk_wr   = signals.wr_clk
         self.valid_wr = signals.wr_en
         self.data_wr  = signals.wr_data
         self.ready_wr = signals.wr_full
-
         self.clk_rd   = signals.rd_clk
         self.valid_rd = signals.rd_empty
         self.data_rd  = signals.rd_data
         self.ready_rd = signals.rd_en
-
         self.valid_wr <= 0
         self.ready_rd <= 0
-        Driver.__init__(self)
         self.log.setLevel(level)
 
     async def write(self, data, sync=True, **kwargs):
-        self.log.info("WRITE AFIFO => %x"%data)
+        self.log.info("[AFIFO driver] write => %x"%data)
         while True:
             await FallingEdge(self.clk_wr)
             self.valid_wr <= 1
@@ -66,14 +74,14 @@ class AFIFODriver(Driver):
                 break
             elif kwargs["exit_empty"] == True:
                 return "empty"
-        self.log.info("READ AFIFO => %x"%data)
+        self.log.info("[AFIFO-driver] read => %x"%data)
         self.ready_rd <= 0
         return data
 
 async def setup_dut(dut, clk_mode):
-    dut._log.info("Configuring clocks... -- %d", clk_mode())
-    print(clk_mode())
-    if clk_mode() == 0:
+    dut._log.info("Configuring clocks... -- %d", clk_mode)
+    print(clk_mode)
+    if clk_mode == 0:
         dut._log.info("50MHz - wr clk / 100MHz - rd clk")
         cocotb.fork(Clock(dut.wr_clk, *CLK_50MHz).start())
         cocotb.fork(Clock(dut.rd_clk, *CLK_100MHz).start())
@@ -98,26 +106,28 @@ def randomly_switch_config():
     return random.randint(0, 1)
 
 async def run_test(dut, config_clock):
+    logging.basicConfig(filename='sim.log', encoding='utf-8', level=logging.DEBUG)
     MAX_SLOTS_FIFO = int(os.environ['PARAM_SLOTS'])
     MAX_WIDTH_FIFO = int(os.environ['PARAM_WIDTH'])
     TEST_RUNS = int(os.environ['TEST_RUNS'])
-    """ Try to write even with fifo full """
     await setup_dut(dut, config_clock)
     await reset_dut(dut)
     ff_driver = AFIFODriver(signals=dut,debug=True)
-    samples = [random.randint(0,(2**MAX_WIDTH_FIFO)-1) for i in range(MAX_SLOTS_FIFO)]
-    for i in samples:
-        assert ((feedback := await ff_driver.write(i,exit_full=False)) == 0), "AFIFO signaling FULL, where actually it's not!"
-    assert ((feedback := await ff_driver.write(random.randint(0,(2**MAX_WIDTH_FIFO)-1),exit_full=True)) == 1), "AFIFO not signaling FULL correctly ==> dut.wr_full = %d" % dut.wr_full
+    for i in range(TEST_RUNS):
+        samples = [random.randint(0,(2**MAX_WIDTH_FIFO)-1) for i in range(random.randint(0,MAX_SLOTS_FIFO))]
+        for i in samples:
+            await ff_driver.write(i,exit_full=False)
+        for i in samples:
+            assert (read_value := await ff_driver.read(exit_empty=False)) == i, "%d != %d" % (read_value, i)
 
 if cocotb.SIM_NAME:
     factory = TestFactory(run_test)
-    factory.add_option('config_clock', [randomly_switch_config])
+    factory.add_option('config_clock', [0, 1])
     factory.generate_tests()
 
 #@pytest.mark.skipif(os.getenv("SIM") != "verilator", reason="Verilator is the only supported")
-@pytest.mark.parametrize("slots",[2,4,8,16,32])
-def test_async_fifo_full(slots):
+@pytest.mark.parametrize("slots",[2,4,8,16,32,64,128])
+def test_fifo_async(slots):
     tests_dir = os.path.dirname(os.path.abspath(__file__))
     rtl_dir   = tests_dir
     dut = "async_gp_fifo"
@@ -128,14 +138,14 @@ def test_async_fifo_full(slots):
     ]
     parameters = {}
     parameters['SLOTS'] = slots
-    parameters['WIDTH'] = 2**random.randint(2,10)
+    parameters['WIDTH'] = 2**random.randint(2,8)
 
     extra_env = {f'PARAM_{k}': str(v) for k, v in parameters.items()}
-    extra_env['TEST_RUNS'] = str(random.randint(2,20))
+    extra_env['TEST_RUNS'] = str(random.randint(2,10))
     extra_env['COCOTB_HDL_TIMEUNIT'] = "1ns"
     extra_env['COCOTB_HDL_TIMEPRECISION'] = "1ns"
 
-    sim_build = os.path.join(tests_dir, "sim_build_pytest_fifo_full_"+"_".join(("{}={}".format(*i) for i in parameters.items())))
+    sim_build = os.path.join(tests_dir, "sim_build_afifo_"+"_".join(("{}={}".format(*i) for i in parameters.items())))
     #extra_args =  ["-64bit                                          \
 					  # -smartlib				                        \
 					  # -smartorder			                            \

@@ -14,7 +14,7 @@ PARAM_SLOTS			:=	2
 PARAM_WIDTH			:=	16
 TEST_RUNS 			:=	20
 
-MODULE					?= initial_fifo_async
+MODULE					?= test_fifo_async
 TOPLEVEL				?= async_gp_fifo
 TOPLEVEL_LANG   ?= verilog
 SIM							?= verilator
