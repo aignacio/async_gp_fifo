@@ -27,11 +27,10 @@ RST_CYCLES = 2
 WAIT_CYCLES = 2
 
 class AFIFODriver():
-    def __init__(self, signals, debug=False):
+    def __init__(self, signals, debug=False, slots=0, width=0):
         level         = logging.DEBUG if debug else logging.WARNING
         self.log      = SimLog("afifo.log")
-        sim_build     = os.environ['SIM_BUILD']
-        file_handler  = RotatingFileHandler(sim_build+"/sim.log", maxBytes=(5 * 1024 * 1024), backupCount=2, mode='w')
+        file_handler  = RotatingFileHandler("sim.log", maxBytes=(5 * 1024 * 1024), backupCount=2, mode='w')
         file_handler.setFormatter(SimColourLogFormatter())
         self.log.addHandler(file_handler)
         self.log.addFilter(SimTimeContextFilter())
@@ -112,7 +111,7 @@ async def run_test(dut, config_clock):
     TEST_RUNS = int(os.environ['TEST_RUNS'])
     await setup_dut(dut, config_clock)
     await reset_dut(dut)
-    ff_driver = AFIFODriver(signals=dut,debug=True)
+    ff_driver = AFIFODriver(signals=dut,debug=True,slots=MAX_SLOTS_FIFO,width=MAX_WIDTH_FIFO)
     for i in range(TEST_RUNS):
         samples = [random.randint(0,(2**MAX_WIDTH_FIFO)-1) for i in range(random.randint(0,MAX_SLOTS_FIFO))]
         for i in samples:
