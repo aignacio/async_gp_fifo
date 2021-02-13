@@ -59,7 +59,7 @@ class AFIFODriver():
             if self.ready_wr == 0:
                 break
             elif kwargs["exit_full"] == True:
-                return 1
+                return "FULL"
         self.valid_wr <= 0
         return 0
 
@@ -72,14 +72,13 @@ class AFIFODriver():
                 await RisingEdge(self.clk_rd)
                 break
             elif kwargs["exit_empty"] == True:
-                return "empty"
+                return "EMPTY"
         self.log.info("[AFIFO-driver] read => %x"%data)
         self.ready_rd <= 0
         return data
 
 async def setup_dut(dut, clk_mode):
     dut._log.info("Configuring clocks... -- %d", clk_mode)
-    print(clk_mode)
     if clk_mode == 0:
         dut._log.info("50MHz - wr clk / 100MHz - rd clk")
         cocotb.fork(Clock(dut.wr_clk, *CLK_50MHz).start())
@@ -94,12 +93,13 @@ async def reset_dut(dut):
     dut.rd_arst.setimmediatevalue(0)
     dut._log.info("Reseting DUT")
     dut.wr_arst <= 1
-    dut.rd_arst <= 0
+    dut.rd_arst <= 1
     await ClockCycles(dut.wr_clk, RST_CYCLES)
-    dut.wr_arst <= 0
+    dut.wr_arst <= 1
     dut.rd_arst <= 1
     await ClockCycles(dut.rd_clk, RST_CYCLES)
     dut.rd_arst <= 0
+    dut.wr_arst <= 0
 
 def randomly_switch_config():
     return random.randint(0, 1)
@@ -118,6 +118,15 @@ async def run_test(dut, config_clock):
             await ff_driver.write(i,exit_full=False)
         for i in samples:
             assert (read_value := await ff_driver.read(exit_empty=False)) == i, "%d != %d" % (read_value, i)
+    # Testing FIFO full flag
+    await reset_dut(dut)
+    samples = [random.randint(0,(2**MAX_WIDTH_FIFO)-1) for i in range(MAX_SLOTS_FIFO)]
+    for i in samples:
+            await ff_driver.write(i,exit_full=False)
+    assert ((value := await ff_driver.write(samples[0],exit_full=True)) == "FULL", "AFIFO not signaling full correctly")
+    # Testing FIFO empty flag
+    await reset_dut(dut)
+    assert ((value := await ff_driver.read(exit_empty=True)) == "EMPTY", "AFIFO not signaling empty correctly")
 
 if cocotb.SIM_NAME:
     factory = TestFactory(run_test)

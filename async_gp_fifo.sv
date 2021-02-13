@@ -113,7 +113,7 @@ module async_gp_fifo # (
       w_wr_bin_ptr_ff  <= ptr_t'(0);
       META_w_rd_gry_ff <= ptr_t'(0);
       w_rd_gry_ptr_ff  <= ptr_t'(0);
-      array_fifo_ff    <= '0;
+      //array_fifo_ff    <= '0; // --> Let's make it "low power"
     end
     else begin
       w_wr_bin_ptr_ff  <= next_w_wr_bin_ptr;
