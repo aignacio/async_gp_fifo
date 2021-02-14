@@ -17,7 +17,7 @@ from logging.handlers import RotatingFileHandler
 from cocotb.log import SimColourLogFormatter, SimLog, SimTimeContextFilter
 from cocotb.regression import TestFactory
 from cocotb.clock import Clock
-from cocotb.drivers import Driver
+from cocotb_bus.drivers import Driver
 from cocotb.triggers import ClockCycles, FallingEdge, RisingEdge, Timer
 from collections import namedtuple
 
@@ -123,10 +123,10 @@ async def run_test(dut, config_clock):
     samples = [random.randint(0,(2**MAX_WIDTH_FIFO)-1) for i in range(MAX_SLOTS_FIFO)]
     for i in samples:
             await ff_driver.write(i,exit_full=False)
-    assert ((value := await ff_driver.write(samples[0],exit_full=True)) == "FULL", "AFIFO not signaling full correctly")
+    assert (value := await ff_driver.write(samples[0],exit_full=True)) == "FULL", "AFIFO not signaling full correctly"
     # Testing FIFO empty flag
     await reset_dut(dut)
-    assert ((value := await ff_driver.read(exit_empty=True)) == "EMPTY", "AFIFO not signaling empty correctly")
+    assert (value := await ff_driver.read(exit_empty=True)) == "EMPTY", "AFIFO not signaling empty correctly"
 
 if cocotb.SIM_NAME:
     factory = TestFactory(run_test)
@@ -142,7 +142,7 @@ def test_fifo_async(slots):
     module = os.path.splitext(os.path.basename(__file__))[0]
     toplevel = dut
     verilog_sources = [
-        os.path.join(rtl_dir, f"{dut}.sv"),
+        os.path.join(rtl_dir, f"../{dut}.sv"),
     ]
     parameters = {}
     parameters['SLOTS'] = slots

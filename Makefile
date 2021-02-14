@@ -51,7 +51,7 @@ endif
 list:
 	@echo "Listing all RTLs $(VERILOG_SOURCES)"
 clean::
-	@rm -rf sim_build waves.shm xrun.* xcelium.shm
+	@rm -rf sim_build* waves.shm xrun.* xcelium.shm
 err:
 	@grep --color "*E" xrun.log
 wv:
