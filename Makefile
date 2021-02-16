@@ -15,7 +15,7 @@ PARAM_WIDTH			:=	16
 TEST_RUNS 			:=	20
 
 MODULE					?= test_fifo_async
-TOPLEVEL				?= async_gp_fifo
+TOPLEVEL				?= tb/async_gp_fifo
 TOPLEVEL_LANG   ?= verilog
 SIM							?= verilator
 GUI							:= 0
