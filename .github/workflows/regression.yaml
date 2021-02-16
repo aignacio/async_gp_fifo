@@ -13,7 +13,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: 3.9
+      python-version: 3.9
 
     - name: Install Docker
       run: |
@@ -27,12 +27,13 @@ jobs:
         sudo apt install docker-ce
 
     - name: Setup Verilator
-       run: |
+      run: |
         alias verilator='sudo docker run -ti -v ${PWD}:/work --user $(id -u):$(id -g) verilator/verilator:latest ${@:1}'
 
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip
         pip install tox tox-gh-actions
+
     - name: Test with tox
       run: tox -- --splits 10
