@@ -15,20 +15,15 @@ jobs:
       with:
         python-version: 3.9
 
-    - name: Install Docker
+    - name: Install Verilator
       run: |
-        sudo apt update
-        sudo apt install apt-transport-https ca-certificates curl software-properties-common
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-        sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
-        sudo apt update
-        apt-cache policy docker-ce
-        sudo apt update
-        sudo apt install docker-ce
-
-    - name: Setup Verilator
-      run: |
-        alias verilator='sudo docker run -ti -v ${PWD}:/work --user $(id -u):$(id -g) verilator/verilator:latest ${@:1}'
+        sudo apt install -y --no-install-recommends make g++ perl python3 autoconf flex bison libfl2 libfl-dev zlibc zlib1g zlib1g-dev
+        git clone https://github.com/verilator/verilator.git -b ${{matrix.sim-version}}
+        cd verilator
+        autoconf
+        ./configure
+        make -j $(nproc)
+        sudo make install
 
     - name: Install Python dependencies
       run: |
