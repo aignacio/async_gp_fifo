@@ -36,4 +36,10 @@ jobs:
         pip install tox tox-gh-actions
 
     - name: Test with tox
+      env:
+        SIM: verilator
+        CXX: 'g++'
+        CC: 'gcc'
+        PYTHON_VERSION: 3.9
+        TOX_TESTENV_PASSENV: GITHUB_ACTIONS
       run: tox -- --splits 10 --group ${{ matrix.group }}
